@@ -9,7 +9,7 @@ Route::get('/', function () {
     if ($user === 'admin') {
         return redirect()->route('admin.dashboard');
     } elseif ($user === 'owner') {
-        return redirect()->route('owner.dashboard');
+        return redirect()->route('admin.dashboard');
     }
     return redirect()->route('login');
 });
@@ -42,15 +42,9 @@ Route::prefix('admin')->group(function () {
     // Validation Status
     Route::post('/barang-keluar/validate/{id}/{status}', [DashboardController::class, 'validateTransaction'])->name('admin.keluar.validate');
 
-    // AJAX - Get grades by product
-    Route::get('/barang/grades/{id}', [DashboardController::class, 'getGradesByProduct'])->name('admin.barang.grades');
-
-    // AJAX - Get all unique product names (for barang masuk autocomplete)
+    // AJAX - Get all products
     Route::get('/barang/list', [DashboardController::class, 'getBarangList'])->name('admin.barang.list');
-});
 
-// Owner Panel Routes
-Route::prefix('owner')->group(function () {
-    Route::get('/', [DashboardController::class, 'owner'])->name('owner.dashboard');
-    Route::get('/export', [DashboardController::class, 'exportCsv'])->name('owner.export');
+    // Export CSV (merged from Owner)
+    Route::get('/export', [DashboardController::class, 'exportCsv'])->name('admin.export');
 });

@@ -7,11 +7,17 @@ use Illuminate\Database\Eloquent\Model;
 class MsBarang extends Model
 {
     protected $table = 'ms_barang';
-    protected $primaryKey = 'mb_id'; // Sesuai dengan SQL: mb_id
+    protected $primaryKey = 'mb_id';
 
-    // Jika ingin memudahkan pemanggilan, kamu bisa buat accessor
-    public function getStokAttribute()
+    protected $fillable = ['mb_desc', 'mb_grade', 'mb_stok', 'mb_hpp', 'mb_profit'];
+
+    public function barangMasuk()
     {
-        return $this->attributes['mb_stok'];
+        return $this->hasMany(BarangMasuk::class, 'bm_mb_id', 'mb_id');
+    }
+
+    public function barangKeluar()
+    {
+        return $this->hasMany(BarangKeluar::class, 'bk_mb_id', 'mb_id');
     }
 }

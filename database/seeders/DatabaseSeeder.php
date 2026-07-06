@@ -13,7 +13,6 @@ class DatabaseSeeder extends Seeder
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         DB::table('barang_masuk')->truncate();
         DB::table('barang_keluar')->truncate();
-        DB::table('product_grades')->truncate();
         DB::table('ms_barang')->truncate();
         DB::table('ms_account')->truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
@@ -24,36 +23,33 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $products = [
-            ['desc' => 'Beras Pandan Wangi Premium', 'grades' => ['A' => ['stock' => 50, 'hpp' => 12000, 'profit' => 3000], 'B' => ['stock' => 40, 'hpp' => 10000, 'profit' => 2500], 'C' => ['stock' => 30, 'hpp' => 8000, 'profit' => 2000]]],
-            ['desc' => 'Beras Premium Mojoputri', 'grades' => ['A' => ['stock' => 60, 'hpp' => 13000, 'profit' => 3500], 'B' => ['stock' => 50, 'hpp' => 11000, 'profit' => 2800], 'C' => ['stock' => 40, 'hpp' => 9000, 'profit' => 2200]]],
-            ['desc' => 'Beras Sentra Ramos Premium', 'grades' => ['A' => ['stock' => 45, 'hpp' => 11500, 'profit' => 2800], 'B' => ['stock' => 55, 'hpp' => 9500, 'profit' => 2300], 'C' => ['stock' => 35, 'hpp' => 7500, 'profit' => 1800]]],
+            ['desc' => 'Beras Pandan Wangi Premium', 'grades' => [
+                'Grade A' => ['stock' => 50, 'hpp' => 12000, 'profit' => 3000],
+                'Grade B' => ['stock' => 40, 'hpp' => 10000, 'profit' => 2500],
+                'Grade C' => ['stock' => 30, 'hpp' => 8000, 'profit' => 2000],
+            ]],
+            ['desc' => 'Beras Premium Mojoputri', 'grades' => [
+                'Grade A' => ['stock' => 60, 'hpp' => 13000, 'profit' => 3500],
+                'Grade B' => ['stock' => 50, 'hpp' => 11000, 'profit' => 2800],
+            ]],
         ];
 
         $barangIds = [];
         foreach ($products as $p) {
-            $totalStock = array_sum(array_column($p['grades'], 'stock'));
-            $mb_id = DB::table('ms_barang')->insertGetId([
-                'mb_desc' => $p['desc'],
-                'mb_grade' => '-',
-                'mb_stok' => $totalStock,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            $barangIds[] = $mb_id;
-
             foreach ($p['grades'] as $grade => $data) {
-                DB::table('product_grades')->insert([
-                    'pg_mb_id' => $mb_id,
-                    'pg_grade' => $grade,
-                    'pg_stock' => $data['stock'],
-                    'pg_hpp' => $data['hpp'],
-                    'pg_profit' => $data['profit'],
+                $mb_id = DB::table('ms_barang')->insertGetId([
+                    'mb_desc' => $p['desc'],
+                    'mb_grade' => $grade,
+                    'mb_stok' => $data['stock'],
+                    'mb_hpp' => $data['hpp'],
+                    'mb_profit' => $data['profit'],
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+                $barangIds[] = $mb_id;
+
                 DB::table('barang_masuk')->insert([
                     'bm_mb_id' => $mb_id,
-                    'bm_grade' => $grade,
                     'bm_qty' => $data['stock'],
                     'bm_date' => today()->format('Y-m-d'),
                     'created_at' => now(),
@@ -67,13 +63,12 @@ class DatabaseSeeder extends Seeder
 
         for ($date = clone $startDate; $date->lte($endDate); $date->addDays(7)) {
             foreach ($barangIds as $mb_id) {
-                $gradeRow = DB::table('product_grades')->where('pg_mb_id', $mb_id)->inRandomOrder()->first();
-                if (!$gradeRow) continue;
+                $barang = DB::table('ms_barang')->where('mb_id', $mb_id)->first();
+                if (!$barang) continue;
 
                 $qtyMasuk = rand(10, 30);
                 DB::table('barang_masuk')->insert([
                     'bm_mb_id' => $mb_id,
-                    'bm_grade' => $gradeRow->pg_grade,
                     'bm_qty' => $qtyMasuk,
                     'bm_date' => $date->format('Y-m-d'),
                     'created_at' => $date,
@@ -81,22 +76,31 @@ class DatabaseSeeder extends Seeder
                 ]);
 
                 $qtyKeluar = rand(5, 20);
-                $totalHarga = ($gradeRow->pg_hpp + $gradeRow->pg_profit) * $qtyKeluar;
+                $totalHarga = ($barang->mb_hpp + $barang->mb_profit) * $qtyKeluar;
                 $status = $date->gt(Carbon::now()->subDays(15)) && rand(0, 4) === 0 ? 'pending' : 'validated';
 
                 DB::table('barang_keluar')->insert([
                     'bk_mb_id' => $mb_id,
-                    'bk_grade' => $gradeRow->pg_grade,
                     'bk_qty' => $qtyKeluar,
-                    'bk_hpp' => $gradeRow->pg_hpp,
-                    'bk_profit' => $gradeRow->pg_profit,
-                    'bk_date' => $date->format('Y-m-d'),
                     'bk_total_harga' => $totalHarga,
+                    'bk_date' => $date->format('Y-m-d'),
                     'status' => $status,
                     'created_at' => $date,
                     'updated_at' => $date,
                 ]);
             }
+        }
+
+        foreach ($barangIds as $mb_id) {
+            $incoming = DB::table('barang_masuk')->where('bm_mb_id', $mb_id)->sum('bm_qty');
+            $outgoing = DB::table('barang_keluar')
+                ->where('bk_mb_id', $mb_id)
+                ->where('status', '!=', 'rejected')
+                ->sum('bk_qty');
+
+            DB::table('ms_barang')
+                ->where('mb_id', $mb_id)
+                ->update(['mb_stok' => max(0, $incoming - $outgoing)]);
         }
     }
 }
